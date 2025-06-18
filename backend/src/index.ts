@@ -2,9 +2,10 @@
 import { PrismaClient } from "../generated/prisma";
 import express, { Request, Response } from "express";
 import cron from "node-cron";
-
+import cors from "cors";
 const app = express();
-
+const environment = process.env.environment;
+const url = process.env.frontendUrl;
 cron.schedule("* * * * *", async () => {
   const currentTime = new Date(Date.now());
   const prisma = new PrismaClient();
@@ -31,14 +32,21 @@ cron.schedule("* * * * *", async () => {
     console.log({ status: "error", message: "An unexpected error occurred" });
   }
 });
-
+app.use(
+  cors({
+    origin:
+      environment === "development"
+        ? ["http://localhost:5173", "http://localhost:5174"]
+        : url,
+  })
+);
 app.use(express.json());
 app.post("/generate", async (req: Request, res: Response) => {
   const currentTime = new Date(Date.now());
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
   const url = req.body.url;
-  if (!url.length) {
-    res.json({
+  if (!url || url.trim().length === 0) {
+    res.status(400).json({
       message: "Invalid URL",
     });
     return;
@@ -69,8 +77,8 @@ app.post("/generate", async (req: Request, res: Response) => {
 
 app.post("/getUrl", async (req: Request, res: Response) => {
   const code = req.body.code;
-  if (!code.length) {
-    res.json({
+  if (!code || code.trim().length === 0) {
+    res.status(400).json({
       message: "Invalid URL",
     });
     return;
@@ -87,13 +95,13 @@ app.post("/getUrl", async (req: Request, res: Response) => {
       },
     });
     if (!url) {
-      res.json({
+      res.status(404).json({
         msg: "URL NOT FOUND",
       });
       return;
     }
     if (url.isExpired) {
-      res.json({
+      res.status(410).json({
         msg: "Link expired",
       });
     }
